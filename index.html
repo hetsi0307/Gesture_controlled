@@ -6,108 +6,154 @@
     <title>Gesture Particles</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #000; font-family: sans-serif; }
-        #ui {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            pointer-events: none; z-index: 10;
-        }
-        #top-bar {
-            padding: 20px; text-align: center; color: white;
-            text-shadow: 0 0 5px #000;
-        }
-        h1 { margin: 0; font-size: 1.2rem; color: #00ffff; }
-        p { margin: 5px 0; font-size: 0.9rem; color: #ccc; }
         
-        /* The Video Box */
-        #video-container {
-            position: absolute; bottom: 20px; right: 20px;
-            width: 160px; height: 120px;
-            border: 2px solid rgba(255,255,255,0.3);
-            border-radius: 10px; overflow: hidden; z-index: 20;
-            background: #000;
-        }
-        #input-video {
-            width: 100%; height: 100%; object-fit: cover;
-            transform: scaleX(-1); /* Mirror effect */
-        }
-
-        /* START BUTTON OVERLAY (Fixes the stuck screen) */
+        /* UI Overlay */
         #overlay {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.9);
             display: flex; flex-direction: column;
             align-items: center; justify-content: center;
-            z-index: 100; pointer-events: auto;
+            z-index: 100;
         }
+        
         button {
-            padding: 15px 40px; font-size: 1.2rem; font-weight: bold;
-            background: #00ffff; border: none; border-radius: 30px;
-            cursor: pointer; box-shadow: 0 0 20px rgba(0,255,255,0.5);
+            padding: 20px 50px; font-size: 1.5rem; font-weight: bold;
+            background: #00ffff; border: none; border-radius: 50px;
+            cursor: pointer; box-shadow: 0 0 25px #00ffff;
             transition: transform 0.2s;
         }
         button:active { transform: scale(0.95); }
-        #loading-text { margin-top: 15px; color: white; display: none; }
+        
+        #status { margin-top: 20px; color: white; font-size: 1.2rem; }
+        
+        /* HUD */
+        #hud {
+            position: absolute; top: 20px; left: 0; width: 100%;
+            text-align: center; pointer-events: none; z-index: 10;
+        }
+        h1 { color: #00ffff; margin: 0; text-shadow: 0 0 10px #000; }
+        p { color: #ccc; font-size: 0.9rem; }
+
+        /* Hidden Video */
+        #video-container {
+            position: absolute; bottom: 10px; right: 10px;
+            width: 120px; height: 90px;
+            border: 2px solid #333; z-index: 20; background: #000;
+        }
+        video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
     </style>
 </head>
 <body>
 
-    <!-- OVERLAY: User must click this to start -->
+    <!-- START SCREEN -->
     <div id="overlay">
-        <h1 style="color:white; margin-bottom:20px;">Hand Gesture Particles</h1>
-        <button id="start-btn">START CAMERA</button>
-        <div id="loading-text">Loading AI... Please wait...</div>
+        <h1 style="color:white; margin-bottom:30px;">Magical Particles</h1>
+        <button id="btn-start" onclick="startApp()">START CAMERA</button>
+        <div id="status"></div>
     </div>
 
-    <!-- UI -->
-    <div id="ui">
-        <div id="top-bar">
-            <h1 id="shape-name">Sphere</h1>
-            <p>👌 Pinch to Change Shape | ✋ Open Hand to Explode</p>
-        </div>
+    <!-- HUD -->
+    <div id="hud">
+        <h1 id="shape-name">Sphere</h1>
+        <p>👌 Pinch to Change | ✋ Open to Explode</p>
     </div>
 
-    <!-- Hidden Video Feed -->
+    <!-- Video -->
     <div id="video-container">
         <video id="input-video" playsinline muted autoplay></video>
     </div>
 
-    <!-- Libraries -->
+    <!-- 1. Load Libraries Globally (No Modules) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
-    
-    <script type="module">
-        import * as THREE from 'https://cdn.skypack.dev/three@0.136.0';
 
-        // --- 1. THREE.JS CONFIG ---
-        const PARTICLE_COUNT = 10000; // Good balance for mobile/desktop
-        const PARTICLE_SIZE = 0.2;
-        
-        let scene, camera, renderer, particles, geometry, material;
+    <!-- 2. Main Logic -->
+    <script>
+        // --- VARIABLES ---
+        let scene, camera, renderer, particles, geometry;
         let positions, targetPositions, colors;
-        let clock = new THREE.Clock();
+        const PARTICLE_COUNT = 8000; 
+        const videoElement = document.getElementById('input-video');
+        const statusText = document.getElementById('status');
+        const startBtn = document.getElementById('btn-start');
         
-        const state = {
-            shapeIndex: 0, isPinching: false, isExploding: false,
-            handPos: new THREE.Vector3(0, 0, 0), lastPinchTime: 0
+        let state = {
+            shapeIndex: 0,
+            isPinching: false, isExploding: false,
+            handPos: new THREE.Vector3(0,0,0),
+            lastPinchTime: 0
         };
-        const shapes = ['Sphere', 'Heart', 'Saturn', 'Flower', 'Torus'];
+        const shapes = ['Sphere', 'Heart', 'Saturn', 'Flower', 'DNA'];
 
+        // --- 1. THE START FUNCTION ---
+        async function startApp() {
+            // Disable button immediately so we know it was clicked
+            startBtn.style.display = 'none';
+            statusText.innerText = "Requesting Camera Access...";
+
+            try {
+                // FORCE Camera Check First
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { width: 640, height: 480, facingMode: 'user' }
+                });
+                videoElement.srcObject = stream;
+                await videoElement.play();
+
+                statusText.innerText = "Camera OK! Loading AI...";
+
+                // Init Three.js
+                initThree();
+                animate();
+
+                // Init MediaPipe
+                const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
+                hands.setOptions({
+                    maxNumHands: 1,
+                    modelComplexity: 0, // Lite mode for mobile
+                    minDetectionConfidence: 0.5,
+                    minTrackingConfidence: 0.5
+                });
+                hands.onResults(onResults);
+
+                // Start Processing Loop
+                statusText.innerText = "Starting Hand Tracking...";
+                const cameraUtils = new Camera(videoElement, {
+                    onFrame: async () => { await hands.send({image: videoElement}); },
+                    width: 640, height: 480
+                });
+                await cameraUtils.start();
+
+                // Success!
+                document.getElementById('overlay').style.display = 'none';
+
+            } catch (err) {
+                alert("ERROR: " + err.message);
+                statusText.innerText = "Error: " + err.message;
+                startBtn.style.display = 'block'; // Show button again
+            }
+        }
+
+        // --- 2. THREE.JS SETUP ---
         function initThree() {
             scene = new THREE.Scene();
             scene.fog = new THREE.FogExp2(0x000000, 0.02);
 
-            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-            camera.position.z = 30;
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+            camera.position.z = 25;
 
-            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer = new THREE.WebGLRenderer({alpha:true, antialias:false});
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
             document.body.appendChild(renderer.domElement);
 
             createParticles();
+            
+            // Resize handler
             window.addEventListener('resize', () => {
-                camera.aspect = window.innerWidth/window.innerHeight;
+                camera.aspect = window.innerWidth / window.innerHeight;
                 camera.updateProjectionMatrix();
                 renderer.setSize(window.innerWidth, window.innerHeight);
             });
@@ -115,13 +161,13 @@
 
         function createParticles() {
             geometry = new THREE.BufferGeometry();
-            positions = new Float32Array(PARTICLE_COUNT * 3);
-            targetPositions = new Float32Array(PARTICLE_COUNT * 3);
-            colors = new Float32Array(PARTICLE_COUNT * 3);
+            positions = new Float32Array(PARTICLE_COUNT*3);
+            targetPositions = new Float32Array(PARTICLE_COUNT*3);
+            colors = new Float32Array(PARTICLE_COUNT*3);
             const c = new THREE.Color();
 
-            for (let i = 0; i < PARTICLE_COUNT; i++) {
-                const [x, y, z] = getSpherePoint(10);
+            for(let i=0; i<PARTICLE_COUNT; i++) {
+                const [x,y,z] = getSpherePoint(10);
                 positions[i*3]=x; positions[i*3+1]=y; positions[i*3+2]=z;
                 targetPositions[i*3]=x; targetPositions[i*3+1]=y; targetPositions[i*3+2]=z;
                 c.setHSL(0.6, 0.8, 0.5);
@@ -130,39 +176,40 @@
             geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
             geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
-            const sprite = new THREE.TextureLoader().load('https://threejs.org/examples/textures/sprites/disc.png');
-            material = new THREE.PointsMaterial({
-                size: PARTICLE_SIZE, vertexColors: true, map: sprite,
+            const material = new THREE.PointsMaterial({
+                size: 0.2, vertexColors: true,
                 blending: THREE.AdditiveBlending, depthWrite: false, transparent: true
             });
             particles = new THREE.Points(geometry, material);
             scene.add(particles);
         }
 
-        // --- 2. SHAPE MATH ---
-        function getSpherePoint(r) {
-            const u=Math.random(), v=Math.random();
-            const t=2*Math.PI*u, p=Math.acos(2*v-1), rad=Math.cbrt(Math.random())*r;
-            return [rad*Math.sin(p)*Math.cos(t), rad*Math.sin(p)*Math.sin(t), rad*Math.cos(p)];
-        }
-        function getHeartPoint() {
-            const t=Math.random()*Math.PI*2, x=16*Math.pow(Math.sin(t),3), y=13*Math.cos(t)-5*Math.cos(2*t)-2*Math.cos(3*t)-Math.cos(4*t), z=(Math.random()-0.5)*5;
-            return [x*0.5, y*0.5, z*0.5];
-        }
-        function getSaturnPoint() {
-            if(Math.random()>0.5) { const a=Math.random()*6.28, r=12+Math.random()*5; return [Math.cos(a)*r, (Math.random()-0.5), Math.sin(a)*r]; }
-            return getSpherePoint(6);
-        }
-        function getFlowerPoint() {
-            const u=Math.random()*6.28, v=Math.random()*3.14, r=8+4*Math.cos(4*u)*Math.sin(v);
-            return [r*Math.sin(v)*Math.cos(u), r*Math.sin(v)*Math.sin(u), r*Math.cos(v)];
-        }
-        function getTorusPoint() {
-            const u=Math.random()*6.28, v=Math.random()*6.28, R=10, r=3;
-            return [(R+r*Math.cos(v))*Math.cos(u), (R+r*Math.cos(v))*Math.sin(u), r*Math.sin(v)];
+        // --- 3. ANIMATION LOOP ---
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            // Interaction: Rotate
+            particles.rotation.y += 0.003;
+            particles.rotation.x += (state.handPos.y - particles.rotation.x) * 0.05;
+            particles.rotation.y += (state.handPos.x - particles.rotation.y) * 0.05;
+
+            // Interaction: Move Particles
+            const pos = geometry.attributes.position.array;
+            for(let i=0; i<PARTICLE_COUNT; i++) {
+                let ix=i*3, iy=i*3+1, iz=i*3+2;
+                let tx = targetPositions[ix], ty = targetPositions[iy], tz = targetPositions[iz];
+
+                if(state.isExploding) { tx*=2.5; ty*=2.5; tz*=2.5; }
+
+                pos[ix] += (tx - pos[ix]) * 0.1;
+                pos[iy] += (ty - pos[iy]) * 0.1;
+                pos[iz] += (tz - pos[iz]) * 0.1;
+            }
+            geometry.attributes.position.needsUpdate = true;
+            renderer.render(scene, camera);
         }
 
-        // --- 3. LOGIC ---
+        // --- 4. SHAPES ---
         function setShape(name) {
             document.getElementById('shape-name').innerText = name;
             let func, hue;
@@ -171,7 +218,7 @@
                 case 'Heart': func=getHeartPoint; hue=0.0; break;
                 case 'Saturn': func=getSaturnPoint; hue=0.1; break;
                 case 'Flower': func=getFlowerPoint; hue=0.8; break;
-                case 'Torus': func=getTorusPoint; hue=0.3; break;
+                case 'DNA': func=getDNAPoint; hue=0.3; break;
             }
             const c = new THREE.Color();
             for(let i=0; i<PARTICLE_COUNT; i++) {
@@ -180,87 +227,36 @@
                 c.setHSL(hue+Math.random()*0.1, 0.8, 0.5);
                 colors[i*3]=c.r; colors[i*3+1]=c.g; colors[i*3+2]=c.b;
             }
-            geometry.attributes.color.needsUpdate=true;
+            geometry.attributes.color.needsUpdate = true;
         }
 
-        function animate() {
-            requestAnimationFrame(animate);
-            // Rotate based on hand
-            particles.rotation.y += 0.002;
-            particles.rotation.x += (state.handPos.y*2 - particles.rotation.x)*0.05;
-            particles.rotation.y += (state.handPos.x*2 - particles.rotation.y)*0.05;
+        // Shape Math
+        function getSpherePoint(r){ const u=Math.random(),v=Math.random(),t=2*Math.PI*u,p=Math.acos(2*v-1),rad=Math.cbrt(Math.random())*r; return [rad*Math.sin(p)*Math.cos(t),rad*Math.sin(p)*Math.sin(t),rad*Math.cos(p)]; }
+        function getHeartPoint(){ const t=Math.random()*6.28, x=16*Math.pow(Math.sin(t),3), y=13*Math.cos(t)-5*Math.cos(2*t)-2*Math.cos(3*t)-Math.cos(4*t), z=(Math.random()-0.5)*5; return [x*0.4, y*0.4, z*0.4]; }
+        function getSaturnPoint(){ if(Math.random()>0.5){ const a=Math.random()*6.28, r=10+Math.random()*4; return [Math.cos(a)*r, (Math.random()-0.5), Math.sin(a)*r]; } return getSpherePoint(5); }
+        function getFlowerPoint(){ const u=Math.random()*6.28, v=Math.random()*3.14, r=6+3*Math.cos(5*u)*Math.sin(v); return [r*Math.sin(v)*Math.cos(u), r*Math.sin(v)*Math.sin(u), r*Math.cos(v)]; }
+        function getDNAPoint(){ const t=Math.random()*20-10, a=t*2, s=Math.random()>0.5?1:-1, r=4; return [r*Math.cos(a+s*3.14), t*1.5, r*Math.sin(a+s*3.14)]; }
 
-            const pos = geometry.attributes.position.array;
-            for(let i=0; i<PARTICLE_COUNT; i++) {
-                let ix=i*3, iy=ix+1, iz=ix+2;
-                let tx=targetPositions[ix], ty=targetPositions[iy], tz=targetPositions[iz];
-                if(state.isExploding) { tx*=2.5; ty*=2.5; tz*=2.5; }
-                pos[ix]+=(tx-pos[ix])*0.08; pos[iy]+=(ty-pos[iy])*0.08; pos[iz]+=(tz-pos[iz])*0.08;
+        // --- 5. MEDIAPIPE LOGIC ---
+        function onResults(results) {
+            if (results.multiHandLandmarks.length > 0) {
+                const lm = results.multiHandLandmarks[0];
+                state.handPos.set((0.5-lm[9].x)*3, (0.5-lm[9].y)*3, 0);
+
+                const pinch = Math.hypot(lm[4].x - lm[8].x, lm[4].y - lm[8].y);
+                if(pinch < 0.05) {
+                    if(!state.isPinching && Date.now() - state.lastPinchTime > 1000) {
+                        state.shapeIndex = (state.shapeIndex + 1) % shapes.length;
+                        setShape(shapes[state.shapeIndex]);
+                        state.isPinching = true;
+                        state.lastPinchTime = Date.now();
+                    }
+                } else state.isPinching = false;
+
+                const span = Math.hypot(lm[0].x - lm[12].x, lm[0].y - lm[12].y);
+                state.isExploding = span > 0.5;
             }
-            geometry.attributes.position.needsUpdate=true;
-            renderer.render(scene, camera);
         }
-
-        // --- 4. STARTUP SEQUENCE ---
-        const startBtn = document.getElementById('start-btn');
-        const loadingText = document.getElementById('loading-text');
-        const overlay = document.getElementById('overlay');
-        const videoElement = document.getElementById('input-video');
-
-        startBtn.addEventListener('click', async () => {
-            startBtn.style.display = 'none';
-            loadingText.style.display = 'block';
-
-            // 1. Initialize Three.js
-            initThree();
-
-            // 2. Initialize MediaPipe Hands
-            const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
-            hands.setOptions({
-                maxNumHands: 1,
-                modelComplexity: 1,
-                minDetectionConfidence: 0.5,
-                minTrackingConfidence: 0.5
-            });
-
-            hands.onResults((results) => {
-                // Hide overlay on first successful result
-                if(overlay.style.display !== 'none') overlay.style.display = 'none';
-
-                if (results.multiHandLandmarks.length > 0) {
-                    const lm = results.multiHandLandmarks[0];
-                    // Hand Position
-                    state.handPos.set((1-lm[9].x - 0.5)*2, (0.5 - lm[9].y)*2, 0);
-                    
-                    // Pinch
-                    const pinch = Math.hypot(lm[4].x - lm[8].x, lm[4].y - lm[8].y);
-                    if(pinch < 0.05) {
-                        if(!state.isPinching && Date.now()-state.lastPinchTime > 1000) {
-                            state.shapeIndex = (state.shapeIndex + 1) % shapes.length;
-                            setShape(shapes[state.shapeIndex]);
-                            state.lastPinchTime = Date.now();
-                            state.isPinching = true;
-                        }
-                    } else state.isPinching = false;
-
-                    // Explode
-                    const span = Math.hypot(lm[0].x - lm[12].x, lm[0].y - lm[12].y);
-                    state.isExploding = span > 0.45;
-                }
-            });
-
-            // 3. Initialize Camera
-            try {
-                const cameraUtils = new Camera(videoElement, {
-                    onFrame: async () => { await hands.send({image: videoElement}); },
-                    width: 640, height: 480
-                });
-                await cameraUtils.start();
-                animate();
-            } catch (error) {
-                alert("Camera Error: " + error.message);
-            }
-        });
     </script>
 </body>
 </html>
