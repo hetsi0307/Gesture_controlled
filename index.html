@@ -3,159 +3,114 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Mobile Hand Particles</title>
+    <title>Gesture Particles</title>
     <style>
-        body { margin: 0; overflow: hidden; background-color: #000; font-family: sans-serif; touch-action: none; }
-        canvas { display: block; }
-        
-        /* Mobile UI Container */
-        #ui-container {
-            position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
-            pointer-events: none;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            z-index: 10;
+        body { margin: 0; overflow: hidden; background-color: #000; font-family: sans-serif; }
+        #ui {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; z-index: 10;
         }
-
         #top-bar {
-            padding: 15px;
-            background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent);
-            color: #fff;
-            text-align: center;
+            padding: 20px; text-align: center; color: white;
+            text-shadow: 0 0 5px #000;
         }
-
-        #status { font-size: 1.2rem; font-weight: bold; color: #00ffff; text-shadow: 0 0 10px cyan; }
-        #instructions { font-size: 0.8rem; color: #ccc; margin-top: 5px; }
-
-        /* Video Preview (Small & Cornered) */
+        h1 { margin: 0; font-size: 1.2rem; color: #00ffff; }
+        p { margin: 5px 0; font-size: 0.9rem; color: #ccc; }
+        
+        /* The Video Box */
         #video-container {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            width: 100px; /* Smaller for mobile */
-            height: 133px; 
+            position: absolute; bottom: 20px; right: 20px;
+            width: 160px; height: 120px;
             border: 2px solid rgba(255,255,255,0.3);
-            border-radius: 8px;
-            overflow: hidden;
-            z-index: 20;
+            border-radius: 10px; overflow: hidden; z-index: 20;
             background: #000;
         }
         #input-video {
-            width: 100%; height: 100%;
-            object-fit: cover;
-            transform: scaleX(-1); /* Mirror */
+            width: 100%; height: 100%; object-fit: cover;
+            transform: scaleX(-1); /* Mirror effect */
         }
 
-        /* Start Button Overlay */
-        #start-screen {
-            position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: #000;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            z-index: 100;
-            pointer-events: auto;
+        /* START BUTTON OVERLAY (Fixes the stuck screen) */
+        #overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.9);
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            z-index: 100; pointer-events: auto;
         }
         button {
-            padding: 15px 40px;
-            font-size: 1.2rem;
-            background: #00ffff;
-            border: none;
-            border-radius: 30px;
-            color: #000;
-            font-weight: bold;
-            cursor: pointer;
-            box-shadow: 0 0 20px rgba(0,255,255,0.5);
+            padding: 15px 40px; font-size: 1.2rem; font-weight: bold;
+            background: #00ffff; border: none; border-radius: 30px;
+            cursor: pointer; box-shadow: 0 0 20px rgba(0,255,255,0.5);
+            transition: transform 0.2s;
         }
-        .loading-text { margin-top: 20px; color: #666; font-size: 0.9rem; }
-
-        /* Gesture Feedback */
-        .feedback {
-            position: absolute;
-            bottom: 20%;
-            width: 100%;
-            text-align: center;
-            font-size: 1.5rem;
-            font-weight: bold;
-            color: #ff00ff;
-            opacity: 0;
-            transition: opacity 0.3s;
-        }
+        button:active { transform: scale(0.95); }
+        #loading-text { margin-top: 15px; color: white; display: none; }
     </style>
 </head>
 <body>
 
-    <!-- Initial Start Screen (Required for Mobile Permissions) -->
-    <div id="start-screen">
-        <h1 style="color:white; margin-bottom:10px;">Magical Particles</h1>
-        <p style="color:#aaa; text-align:center; padding:0 20px;">
-            Requires Camera Access.<br>Perform gestures in front of phone.
-        </p>
-        <button id="btn-start">START CAMERA</button>
-        <div id="loader" class="loading-text" style="display:none;">Loading AI Models...</div>
+    <!-- OVERLAY: User must click this to start -->
+    <div id="overlay">
+        <h1 style="color:white; margin-bottom:20px;">Hand Gesture Particles</h1>
+        <button id="start-btn">START CAMERA</button>
+        <div id="loading-text">Loading AI... Please wait...</div>
     </div>
 
-    <!-- Main UI -->
-    <div id="ui-container">
+    <!-- UI -->
+    <div id="ui">
         <div id="top-bar">
-            <div id="status">Sphere</div>
-            <div id="instructions">👌 Pinch to Change | ✋ Open to Explode</div>
+            <h1 id="shape-name">Sphere</h1>
+            <p>👌 Pinch to Change Shape | ✋ Open Hand to Explode</p>
         </div>
-        <div class="feedback" id="feedback-text">Shape Changed!</div>
     </div>
 
+    <!-- Hidden Video Feed -->
     <div id="video-container">
-        <!-- 'playsinline' is CRITICAL for iOS Safari to prevent fullscreen video -->
         <video id="input-video" playsinline muted autoplay></video>
     </div>
 
-    <!-- Scripts -->
+    <!-- Libraries -->
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
-
+    
     <script type="module">
         import * as THREE from 'https://cdn.skypack.dev/three@0.136.0';
 
-        // --- MOBILE OPTIMIZATIONS ---
-        // Reduce particle count for mobile GPUs (8000 is usually safe)
-        const PARTICLE_COUNT = window.innerWidth < 600 ? 8000 : 15000; 
-        const PARTICLE_SIZE = window.innerWidth < 600 ? 0.25 : 0.15; // Bigger particles on mobile
+        // --- 1. THREE.JS CONFIG ---
+        const PARTICLE_COUNT = 10000; // Good balance for mobile/desktop
+        const PARTICLE_SIZE = 0.2;
         
         let scene, camera, renderer, particles, geometry, material;
         let positions, targetPositions, colors;
         let clock = new THREE.Clock();
         
         const state = {
-            shapeIndex: 0,
-            isPinching: false,
-            isExploding: false,
-            handPos: new THREE.Vector3(0, 0, 0),
-            lastPinchTime: 0
+            shapeIndex: 0, isPinching: false, isExploding: false,
+            handPos: new THREE.Vector3(0, 0, 0), lastPinchTime: 0
         };
+        const shapes = ['Sphere', 'Heart', 'Saturn', 'Flower', 'Torus'];
 
-        const shapes = ['Sphere', 'Heart', 'Saturn', 'Flower', 'DNA'];
-
-        // --- 1. THREE.JS SETUP ---
         function initThree() {
             scene = new THREE.Scene();
-            scene.fog = new THREE.FogExp2(0x000000, 0.03);
+            scene.fog = new THREE.FogExp2(0x000000, 0.02);
 
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-            camera.position.z = 25; // Closer for mobile screens
+            camera.position.z = 30;
 
-            renderer = new THREE.WebGLRenderer({ antialias: false, alpha: true }); // Disable AA for performance
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
             document.body.appendChild(renderer.domElement);
 
             createParticles();
-            window.addEventListener('resize', onWindowResize, false);
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth/window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
         }
 
         function createParticles() {
@@ -163,199 +118,149 @@
             positions = new Float32Array(PARTICLE_COUNT * 3);
             targetPositions = new Float32Array(PARTICLE_COUNT * 3);
             colors = new Float32Array(PARTICLE_COUNT * 3);
-
-            const colorObj = new THREE.Color();
+            const c = new THREE.Color();
 
             for (let i = 0; i < PARTICLE_COUNT; i++) {
-                const [x, y, z] = getSpherePoint(8); // Start smaller
-                positions[i * 3] = x; positions[i * 3 + 1] = y; positions[i * 3 + 2] = z;
-                targetPositions[i * 3] = x; targetPositions[i * 3 + 1] = y; targetPositions[i * 3 + 2] = z;
-
-                colorObj.setHSL(0.6, 0.8, 0.5); // Blue
-                colors[i * 3] = colorObj.r; colors[i * 3 + 1] = colorObj.g; colors[i * 3 + 2] = colorObj.b;
+                const [x, y, z] = getSpherePoint(10);
+                positions[i*3]=x; positions[i*3+1]=y; positions[i*3+2]=z;
+                targetPositions[i*3]=x; targetPositions[i*3+1]=y; targetPositions[i*3+2]=z;
+                c.setHSL(0.6, 0.8, 0.5);
+                colors[i*3]=c.r; colors[i*3+1]=c.g; colors[i*3+2]=c.b;
             }
-
             geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
             geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
             const sprite = new THREE.TextureLoader().load('https://threejs.org/examples/textures/sprites/disc.png');
-
             material = new THREE.PointsMaterial({
-                size: PARTICLE_SIZE,
-                vertexColors: true,
-                map: sprite,
-                blending: THREE.AdditiveBlending,
-                depthWrite: false,
-                transparent: true
+                size: PARTICLE_SIZE, vertexColors: true, map: sprite,
+                blending: THREE.AdditiveBlending, depthWrite: false, transparent: true
             });
-
             particles = new THREE.Points(geometry, material);
             scene.add(particles);
         }
 
         // --- 2. SHAPE MATH ---
         function getSpherePoint(r) {
-            const u = Math.random(); const v = Math.random();
-            const theta = 2 * Math.PI * u; const phi = Math.acos(2 * v - 1);
-            const rad = Math.cbrt(Math.random()) * r;
-            return [rad * Math.sin(phi) * Math.cos(theta), rad * Math.sin(phi) * Math.sin(theta), rad * Math.cos(phi)];
+            const u=Math.random(), v=Math.random();
+            const t=2*Math.PI*u, p=Math.acos(2*v-1), rad=Math.cbrt(Math.random())*r;
+            return [rad*Math.sin(p)*Math.cos(t), rad*Math.sin(p)*Math.sin(t), rad*Math.cos(p)];
         }
-
         function getHeartPoint() {
-            const t = Math.random() * Math.PI * 2;
-            const x = 16 * Math.pow(Math.sin(t), 3);
-            const y = 13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t);
-            const z = (Math.random() - 0.5) * 5; 
-            const s = 0.4; // Scale down
-            return [x*s, y*s, z*s];
+            const t=Math.random()*Math.PI*2, x=16*Math.pow(Math.sin(t),3), y=13*Math.cos(t)-5*Math.cos(2*t)-2*Math.cos(3*t)-Math.cos(4*t), z=(Math.random()-0.5)*5;
+            return [x*0.5, y*0.5, z*0.5];
         }
-
         function getSaturnPoint() {
-            if(Math.random() > 0.5) {
-                 // Ring
-                 const angle = Math.random() * Math.PI * 2;
-                 const r = 10 + Math.random() * 4;
-                 return [Math.cos(angle)*r, (Math.random()-0.5), Math.sin(angle)*r];
-            }
-            return getSpherePoint(5);
+            if(Math.random()>0.5) { const a=Math.random()*6.28, r=12+Math.random()*5; return [Math.cos(a)*r, (Math.random()-0.5), Math.sin(a)*r]; }
+            return getSpherePoint(6);
         }
-
         function getFlowerPoint() {
-            const u = Math.random() * Math.PI * 2; const v = Math.random() * Math.PI;
-            const r = 6 + 3 * Math.cos(5 * u) * Math.sin(v);
-            return [r * Math.sin(v) * Math.cos(u), r * Math.sin(v) * Math.sin(u), r * Math.cos(v)];
+            const u=Math.random()*6.28, v=Math.random()*3.14, r=8+4*Math.cos(4*u)*Math.sin(v);
+            return [r*Math.sin(v)*Math.cos(u), r*Math.sin(v)*Math.sin(u), r*Math.cos(v)];
         }
-
-        function getDNAPoint() {
-             const t = Math.random() * 20 - 10; // height
-             const angle = t * 2;
-             const side = Math.random() > 0.5 ? 1 : -1;
-             const r = 4;
-             return [r * Math.cos(angle + side*Math.PI), t * 1.5, r * Math.sin(angle + side*Math.PI)];
+        function getTorusPoint() {
+            const u=Math.random()*6.28, v=Math.random()*6.28, R=10, r=3;
+            return [(R+r*Math.cos(v))*Math.cos(u), (R+r*Math.cos(v))*Math.sin(u), r*Math.sin(v)];
         }
 
         // --- 3. LOGIC ---
-        function setShape(shapeName) {
-            document.getElementById('status').innerText = shapeName;
-            showFeedback(shapeName);
-            
-            let posFunc, hue;
-            switch(shapeName) {
-                case 'Sphere': posFunc = () => getSpherePoint(8); hue = 0.6; break;
-                case 'Heart': posFunc = getHeartPoint; hue = 0.0; break;
-                case 'Saturn': posFunc = getSaturnPoint; hue = 0.1; break;
-                case 'Flower': posFunc = getFlowerPoint; hue = 0.8; break;
-                case 'DNA': posFunc = getDNAPoint; hue = 0.3; break;
+        function setShape(name) {
+            document.getElementById('shape-name').innerText = name;
+            let func, hue;
+            switch(name) {
+                case 'Sphere': func=()=>getSpherePoint(10); hue=0.6; break;
+                case 'Heart': func=getHeartPoint; hue=0.0; break;
+                case 'Saturn': func=getSaturnPoint; hue=0.1; break;
+                case 'Flower': func=getFlowerPoint; hue=0.8; break;
+                case 'Torus': func=getTorusPoint; hue=0.3; break;
             }
-
             const c = new THREE.Color();
             for(let i=0; i<PARTICLE_COUNT; i++) {
-                const [x,y,z] = posFunc();
+                const [x,y,z] = func();
                 targetPositions[i*3]=x; targetPositions[i*3+1]=y; targetPositions[i*3+2]=z;
-                
-                c.setHSL(hue + Math.random()*0.1, 0.8, 0.5);
+                c.setHSL(hue+Math.random()*0.1, 0.8, 0.5);
                 colors[i*3]=c.r; colors[i*3+1]=c.g; colors[i*3+2]=c.b;
             }
-            geometry.attributes.color.needsUpdate = true;
-        }
-
-        function showFeedback(text) {
-            const el = document.getElementById('feedback-text');
-            el.innerText = text;
-            el.style.opacity = 1;
-            setTimeout(() => el.style.opacity = 0, 1000);
+            geometry.attributes.color.needsUpdate=true;
         }
 
         function animate() {
             requestAnimationFrame(animate);
-            const time = clock.getElapsedTime();
+            // Rotate based on hand
+            particles.rotation.y += 0.002;
+            particles.rotation.x += (state.handPos.y*2 - particles.rotation.x)*0.05;
+            particles.rotation.y += (state.handPos.x*2 - particles.rotation.y)*0.05;
+
             const pos = geometry.attributes.position.array;
-
-            // Rotation Logic (Subtle on mobile)
-            particles.rotation.y += 0.003; 
-            particles.rotation.x += (state.handPos.y - particles.rotation.x) * 0.05;
-            particles.rotation.y += (state.handPos.x - particles.rotation.y) * 0.05;
-
             for(let i=0; i<PARTICLE_COUNT; i++) {
-                const ix=i*3, iy=i*3+1, iz=i*3+2;
-                let tx = targetPositions[ix], ty = targetPositions[iy], tz = targetPositions[iz];
-
-                if(state.isExploding) { tx*=2; ty*=2; tz*=2; }
-
-                pos[ix] += (tx - pos[ix]) * 0.1;
-                pos[iy] += (ty - pos[iy]) * 0.1;
-                pos[iz] += (tz - pos[iz]) * 0.1;
+                let ix=i*3, iy=ix+1, iz=ix+2;
+                let tx=targetPositions[ix], ty=targetPositions[iy], tz=targetPositions[iz];
+                if(state.isExploding) { tx*=2.5; ty*=2.5; tz*=2.5; }
+                pos[ix]+=(tx-pos[ix])*0.08; pos[iy]+=(ty-pos[iy])*0.08; pos[iz]+=(tz-pos[iz])*0.08;
             }
-            geometry.attributes.position.needsUpdate = true;
+            geometry.attributes.position.needsUpdate=true;
             renderer.render(scene, camera);
         }
 
-        function onWindowResize() {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        }
+        // --- 4. STARTUP SEQUENCE ---
+        const startBtn = document.getElementById('start-btn');
+        const loadingText = document.getElementById('loading-text');
+        const overlay = document.getElementById('overlay');
+        const videoElement = document.getElementById('input-video');
 
-        // --- 4. AI & CAMERA ---
-        function onResults(results) {
-            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-                const lm = results.multiHandLandmarks[0];
-                
-                // Position (0-1) -> (-1 to 1)
-                state.handPos.set((0.5 - lm[9].x) * 3, (0.5 - lm[9].y) * 3, 0);
+        startBtn.addEventListener('click', async () => {
+            startBtn.style.display = 'none';
+            loadingText.style.display = 'block';
 
-                // Pinch (Thumb-Index)
-                const pinch = Math.hypot(lm[4].x - lm[8].x, lm[4].y - lm[8].y);
-                if(pinch < 0.04) { // Slightly stricter threshold for mobile
-                    if(!state.isPinching && Date.now() - state.lastPinchTime > 1000) {
-                        state.shapeIndex = (state.shapeIndex + 1) % shapes.length;
-                        setShape(shapes[state.shapeIndex]);
-                        state.isPinching = true;
-                        state.lastPinchTime = Date.now();
-                    }
-                } else {
-                    state.isPinching = false;
-                }
-
-                // Explode (Wrist-Middle)
-                const span = Math.hypot(lm[0].x - lm[12].x, lm[0].y - lm[12].y);
-                state.isExploding = span > 0.55; // Higher threshold for explosion
-            }
-        }
-
-        // --- STARTUP SEQUENCE ---
-        document.getElementById('btn-start').addEventListener('click', async () => {
-            document.getElementById('btn-start').style.display = 'none';
-            document.getElementById('loader').style.display = 'block';
-
+            // 1. Initialize Three.js
             initThree();
 
-            const videoElement = document.getElementById('input-video');
-            
+            // 2. Initialize MediaPipe Hands
             const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
-            
-            // OPTIMIZED FOR MOBILE: Use 'lite' modelComplexity
             hands.setOptions({
                 maxNumHands: 1,
-                modelComplexity: 0, // 0 = Lite (Fastest), 1 = Full
+                modelComplexity: 1,
                 minDetectionConfidence: 0.5,
                 minTrackingConfidence: 0.5
             });
-            hands.onResults(onResults);
 
-            const cameraUtils = new Camera(videoElement, {
-                onFrame: async () => { await hands.send({image: videoElement}); },
-                width: 480, // Lower res for performance
-                height: 360,
-                facingMode: 'user' // Force front camera
+            hands.onResults((results) => {
+                // Hide overlay on first successful result
+                if(overlay.style.display !== 'none') overlay.style.display = 'none';
+
+                if (results.multiHandLandmarks.length > 0) {
+                    const lm = results.multiHandLandmarks[0];
+                    // Hand Position
+                    state.handPos.set((1-lm[9].x - 0.5)*2, (0.5 - lm[9].y)*2, 0);
+                    
+                    // Pinch
+                    const pinch = Math.hypot(lm[4].x - lm[8].x, lm[4].y - lm[8].y);
+                    if(pinch < 0.05) {
+                        if(!state.isPinching && Date.now()-state.lastPinchTime > 1000) {
+                            state.shapeIndex = (state.shapeIndex + 1) % shapes.length;
+                            setShape(shapes[state.shapeIndex]);
+                            state.lastPinchTime = Date.now();
+                            state.isPinching = true;
+                        }
+                    } else state.isPinching = false;
+
+                    // Explode
+                    const span = Math.hypot(lm[0].x - lm[12].x, lm[0].y - lm[12].y);
+                    state.isExploding = span > 0.45;
+                }
             });
 
-            await cameraUtils.start();
-            
-            document.getElementById('start-screen').style.display = 'none';
-            animate();
+            // 3. Initialize Camera
+            try {
+                const cameraUtils = new Camera(videoElement, {
+                    onFrame: async () => { await hands.send({image: videoElement}); },
+                    width: 640, height: 480
+                });
+                await cameraUtils.start();
+                animate();
+            } catch (error) {
+                alert("Camera Error: " + error.message);
+            }
         });
-
     </script>
 </body>
 </html>
